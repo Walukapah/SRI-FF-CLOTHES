@@ -1,38 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "avatar/*",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "SRIAPI/*",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/app.py",
-      "dest": "/api/ff-clothes.py",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/avatar/(?<avatarId>[^/]+\\.png)",
-      "dest": "/avatar/$avatarId"
-    },
-    {
-      "src": "/SRIAPI/(?<filename>[^/]+\\.png)",
-      "dest": "/SRIAPI/$filename",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      }
-    }
-  ],
-  "env": {
-    "PYTHONUNBUFFERED": "1"
-  }
+    "version":2,
+    "builds": [
+        {
+            "src":"./index.py",
+            "use": "@vercel/python",
+            "config":{"runtime":"python3.8"}
+        }
+    ],
+    "routes": [
+        {
+            "src":"/(.*)",
+            "dest":"/"
+        }
+    ]
 }
