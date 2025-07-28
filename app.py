@@ -1,13 +1,16 @@
-import os
 from PIL import Image
 import requests
 from io import BytesIO
 import json
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
+import os
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 
-# Load item data once when the server starts
+app = Flask(__name__)
+CORS(app)
+
+# Load item data
 with open("itemData.json", "r", encoding="utf-8") as f:
     item_data = json.load(f)
 item_lookup = {item["Id"]: item for item in item_data}
@@ -122,51 +125,27 @@ def generate_clothes_image(uid, region):
     except Exception as e:
         return None, str(e)
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        try:
-            # Parse query parameters
-            query = parse_qs(urlparse(self.path).query)
-            uid = query.get('uid', [''])[0]
-            region = query.get('region', [''])[0]
+@app.route('/ff-clothes', methods=['GET'])
+def ff_clothes():
+    uid = request.args.get('uid')
+    region = request.args.get('region')
 
-            if not uid or not region:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    "error": "Both uid and region parameters are required"
-                }).encode('utf-8'))
-                return
+    if not uid or not region:
+        return jsonify({
+            "error": "Both uid and region parameters are required",
+            "example": "/ff-clothes?uid=12345678&region=ru"
+        }), 400
 
-            output_path, error = generate_clothes_image(uid, region)
+    output_path, error = generate_clothes_image(uid, region)
 
-            if error:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    "error": error,
-                    "uid": uid,
-                    "region": region
-                }).encode('utf-8'))
-                return
+    if error:
+        return jsonify({
+            "error": error,
+            "uid": uid,
+            "region": region
+        }), 400
 
-            # Return the image URL
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "success": True,
-                "image_url": f"https://{self.headers.get('Host')}/{output_path}",
-                "uid": uid,
-                "region": region
-            }).encode('utf-8'))
+    return send_file(output_filename, mimetype='image/png')
 
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "error": f"Internal server error: {str(e)}"
-            }).encode('utf-8'))
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
