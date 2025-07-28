@@ -1,151 +1,88 @@
-from PIL import Image
-import requests
-from io import BytesIO
-import json
-from datetime import datetime
-import os
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
+from flask import Flask, request, send_file from PIL import Image import requests from io import BytesIO import json import os from datetime import datetime
 
-app = Flask(__name__)
-CORS(app)
+app = Flask(name)
 
-# Load item data
-with open("itemData.json", "r", encoding="utf-8") as f:
-    item_data = json.load(f)
-item_lookup = {item["Id"]: item for item in item_data}
+Create output folder
 
-# Hexagon positions
-hex_positions = [
-    (150, 250),  # 0 - top
-    (158, 554),  # 1 - default
-    (267, 802),  # 2 - bottom
-    (848, 186),  # 3 - hair
-    (911, 408),  # 4 - headadditive
-    (802, 617),  # 5 - accessory
-    (889, 864)   # 6 - shoe
-]
+SAVE_FOLDER = "SRIAPI" os.makedirs(SAVE_FOLDER, exist_ok=True)
 
-icon_size = 90
+Load itemData.json once
 
-keyword_to_index = {
-    "top": 0,
-    "bottom": 2,
-    "hair": 3,
-    "headadditive": 4,
-    "accessory": 5,
-    "shoe": 6,
-}
+with open("itemData.json", "r", encoding="utf-8") as f: item_data = json.load(f) item_lookup = {item["Id"]: item for item in item_data}
 
-def generate_clothes_image(uid, region):
-    try:
-        # Step 1: Get player info from API
-        api_url = f"https://free-fire-info-site-phi.vercel.app/player-info?region={region}&uid={uid}"
-        response = requests.get(api_url)
-        data = response.json()
+Hexagon positions
 
-        if "profileInfo" not in data:
-            return None, "Player not found or API error"
+hex_positions = [ (150, 250),  # 0 - top (158, 554),  # 1 - default (267, 802),  # 2 - bottom (848, 186),  # 3 - hair (911, 408),  # 4 - headadditive (802, 617),  # 5 - accessory (889, 864)   # 6 - shoe ]
 
-        avatar_id = data["profileInfo"]["avatarId"]
-        clothes = data["profileInfo"]["clothes"]
+Keyword to hex index mapping
 
-        # Step 2: Load background image
-        try:
-            avatar_path = f"avatar/{avatar_id}.png"
-            if not os.path.exists(avatar_path):
-                # Try to download if not exists
-                avatar_url = f"https://icons-freefire.vercel.app/AVATAR/{avatar_id}.png"
-                avatar_response = requests.get(avatar_url)
-                if avatar_response.status_code == 200:
-                    with open(avatar_path, "wb") as f:
-                        f.write(avatar_response.content)
-                else:
-                    # Use default avatar if specific one not found
-                    avatar_path = "avatar/default.png"
-            
-            background = Image.open(avatar_path).convert("RGBA")
-        except Exception as e:
-            return None, f"Error loading avatar: {str(e)}"
+keyword_to_index = { "top": 0, "bottom": 2, "hair": 3, "headadditive": 4, "accessory": 5, "shoe": 6, }
 
-        used_indexes = set()
+@app.route("/ff-clothes") def ff_clothes(): uid = request.args.get("uid") region = request.args.get("region")
 
-        # Step 3: Place icons based on keywords
-        for item_id in clothes:
-            try:
-                item = item_lookup.get(item_id)
-                if not item:
-                    print(f"⚠️ ID {item_id} not found in itemData.json")
-                    continue
+if not uid or not region:
+    return {"error": "Missing uid or region"}, 400
 
-                icon_name = item.get("Icon", "").lower()
-                matched_index = None
+try:
+    # Get player info
+    api_url = f"https://free-fire-info-site-phi.vercel.app/player-info?region={region}&uid={uid}"
+    response = requests.get(api_url)
+    data = response.json()
 
-                for keyword, idx in keyword_to_index.items():
-                    if keyword in icon_name:
-                        matched_index = idx
-                        break
+    avatar_id = data["profileInfo"]["avatarId"]
+    clothes = data["profileInfo"]["clothes"]
 
-                if matched_index is None:
-                    matched_index = 1  # default position
+    # Load background from avatar folder
+    background_path = f"avatar/{avatar_id}.png"
+    if not os.path.exists(background_path):
+        return {"error": f"Background not found for avatarId {avatar_id}"}, 404
 
-                if matched_index in used_indexes:
-                    print(f"❌ Slot {matched_index} already used, skipping {item_id}")
-                    continue
+    background = Image.open(background_path).convert("RGBA")
+    icon_size = 90
+    used_indexes = set()
 
-                used_indexes.add(matched_index)
+    for item_id in clothes:
+        item = item_lookup.get(item_id)
+        if not item:
+            continue
 
-                icon_url = f"https://icons-freefire.vercel.app/ICONS/{item_id}.png"
-                icon_response = requests.get(icon_url)
-                if icon_response.status_code != 200:
-                    continue
+        icon_name = item.get("Icon", "").lower()
+        matched_index = None
 
-                icon = Image.open(BytesIO(icon_response.content)).convert("RGBA")
-                icon = icon.resize((icon_size, icon_size))
+        for keyword, idx in keyword_to_index.items():
+            if keyword in icon_name:
+                matched_index = idx
+                break
 
-                cx, cy = hex_positions[matched_index]
-                x = cx - icon_size // 2
-                y = cy - icon_size // 2
+        if matched_index is None:
+            matched_index = 1  # Default to second hex
 
-                background.paste(icon, (x, y), icon)
+        if matched_index in used_indexes:
+            continue  # Skip already filled position
 
-            except Exception as e:
-                print(f"❌ Error processing item {item_id}: {e}")
+        used_indexes.add(matched_index)
 
-        # Step 4: Save the output
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_filename = f"SRIAPI/{uid}_{timestamp}.png"
-        
-        # Create SRIAPI directory if not exists
-        os.makedirs("SRIAPI", exist_ok=True)
-        
-        background.save(output_filename)
-        return output_filename, None
+        icon_url = f"https://icons-freefire.vercel.app/ICONS/{item_id}.png"
+        icon_response = requests.get(icon_url)
+        icon = Image.open(BytesIO(icon_response.content)).convert("RGBA")
+        icon = icon.resize((icon_size, icon_size))
 
-    except Exception as e:
-        return None, str(e)
+        cx, cy = hex_positions[matched_index]
+        x = cx - icon_size // 2
+        y = cy - icon_size // 2
 
-@app.route('/ff-clothes', methods=['GET'])
-def ff_clothes():
-    uid = request.args.get('uid')
-    region = request.args.get('region')
+        background.paste(icon, (x, y), icon)
 
-    if not uid or not region:
-        return jsonify({
-            "error": "Both uid and region parameters are required",
-            "example": "/ff-clothes?uid=12345678&region=ru"
-        }), 400
+    # Save with filename: UID_YYYY-MM-DD_HH-MM-SS.png
+    now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{uid}_{now}.png"
+    filepath = os.path.join(SAVE_FOLDER, filename)
+    background.save(filepath)
 
-    output_path, error = generate_clothes_image(uid, region)
+    return send_file(filepath, mimetype='image/png')
 
-    if error:
-        return jsonify({
-            "error": error,
-            "uid": uid,
-            "region": region
-        }), 400
+except Exception as e:
+    return {"error": str(e)}, 500
 
-    return send_file(output_filename, mimetype='image/png')
+if name == 'main': app.run(debug=True, port=3000)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
