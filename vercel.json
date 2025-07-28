@@ -1,15 +1,6 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python"
-    }
-  ],
+  "builds": [{ "src": "api/ff-clothes.py", "use": "@vercel/python" }],
   "routes": [
-    {
-      "src": "/ff-clothes",
-      "dest": "app.py"
-    }
+    { "src": "/api/ff-clothes", "dest": "/api/ff-clothes.py" }
   ]
 }
