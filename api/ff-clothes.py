@@ -38,7 +38,7 @@ def ff_clothes():
         avatar_id = data["profileInfo"]["avatarId"]
         clothes = data["profileInfo"]["clothes"]
 
-        bg_path = f"avatar/{avatar_id}.png"
+        bg_path = f"avatar/{avatar_id}.jpg"
         if not os.path.exists(bg_path):
             return {"error": "Avatar image not found"}, 404
 
